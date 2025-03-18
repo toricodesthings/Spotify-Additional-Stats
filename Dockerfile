@@ -1,29 +1,42 @@
-# Use Playwright's official image with necessary dependencies
-FROM mcr.microsoft.com/playwright:v1.51.1-jammy
+# Use a Node.js base image that includes a minimal Debian distribution
+FROM node:16-buster-slim
 
-# Set the working directory inside the container
-WORKDIR /app
+# Install dependencies required for Chromium (Puppeteer)
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    xdg-utils \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and package-lock.json first (to leverage Docker caching)
-COPY package.json package-lock.json ./
+# Create app directory
+WORKDIR /usr/src/app
 
-# Install dependencies
-RUN npm install
+# Copy package.json and package-lock.json (if available) and install dependencies
+COPY package*.json ./
+RUN npm install --production
 
-# Copy all project files into the container
+# Copy the rest of your application code
 COPY . .
 
-# Set Playwright to use a persistent browser storage path
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
-
-# Install Playwright browsers and dependencies at build time
-RUN npx playwright install --with-deps
-
-# Ensure Playwright has correct permissions
-RUN chmod -R 777 /app/playwright-browsers
-
-# Expose the port your app runs on
+# Expose the port your server listens on
 EXPOSE 10000
 
-# Start the application (No need to reinstall Playwright on every restart)
-CMD ["node", "server.js"]
+# Run your application (adjust the entry point if needed)
+CMD ["node", "server_puppeteer.js"]

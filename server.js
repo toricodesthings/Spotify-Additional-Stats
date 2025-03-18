@@ -31,7 +31,7 @@ async function getMonthlyListeners(artistId) {
         const result = { artistId, monthlyListeners: element ? (await element.innerText()).replace(/\D/g, "") : "N/A" };
 
         cache.set(artistId, result); // ✅ Cache result
-        setTimeout(() => cache.delete(artistId), 20 * 60 * 1000); // ✅ Clear cache after 10 mins
+        setTimeout(() => cache.delete(artistId), 20 * 60 * 1000); // ✅ Clear cache after 20 mins
 
         return result;
     } catch (error) {
@@ -57,15 +57,19 @@ async function getTrackPlaycount(trackId) {
     }
 }
 
-// **API Routes**
+// **API Routes with Response Time**
 app.get("/get/monthly-listeners/:artistId", async (req, res) => {
+    const start = Date.now();
     const result = await getMonthlyListeners(req.params.artistId);
-    res.json(result);
+    const responseTime = Date.now() - start;
+    res.json({ ...result, responseTime });
 });
 
 app.get("/get/playcount/:trackId", async (req, res) => {
+    const start = Date.now();
     const result = await getTrackPlaycount(req.params.trackId);
-    res.json(result);
+    const responseTime = Date.now() - start;
+    res.json({ ...result, responseTime });
 });
 
 // **Start Server**
