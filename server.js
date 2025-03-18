@@ -2,7 +2,7 @@ const express = require("express");
 const { chromium } = require("playwright");
 
 const app = express();
-const PORT = process.env.PORT || 5190;
+const PORT = process.env.PORT || 10000;
 const SPOTIFY_WEB_ENDPOINT = "https://open.spotify.com";
 const cache = new Map(); // ✅ Simple cache
 
@@ -29,7 +29,7 @@ async function getMonthlyListeners(artistId) {
 
     const page = await browserInstance.newPage();
     try {
-        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, { timeout: 6000, waitUntil: "domcontentloaded" });
+        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, { timeout: 10000, waitUntil: "domcontentloaded" });
         const element = await page.waitForSelector("span:has-text('monthly listeners')", { timeout: 10000 });
         const result = { artistId, monthlyListeners: element ? (await element.innerText()).replace(/\D/g, "") : "N/A" };
 
@@ -49,7 +49,7 @@ async function getMonthlyListeners(artistId) {
 async function getTrackPlaycount(trackId) {
     const page = await browserInstance.newPage();
     try {
-        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, { timeout: 6000, waitUntil: "domcontentloaded" });
+        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, { timeout: 10000, waitUntil: "domcontentloaded" });
         const element = await page.waitForSelector("span[data-testid='playcount']", { timeout: 10000 });
         return { trackId, playCount: element ? await element.innerText() : "N/A" };
     } catch (error) {

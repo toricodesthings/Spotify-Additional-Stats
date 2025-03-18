@@ -1,5 +1,5 @@
 # Use Playwright's official image with necessary dependencies
-FROM mcr.microsoft.com/playwright:focal
+FROM mcr.microsoft.com/playwright:v1.51.1-focal
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY . .
 RUN npx playwright install --with-deps
 
 # Expose the port your app runs on (Render typically uses 10000+ ports)
-EXPOSE 5190
+EXPOSE 10000
 
 # Command to start the application
 CMD ["node", "server.js"]
