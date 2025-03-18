@@ -1,93 +1,78 @@
-/* For Personal and Education Purposes Only */
 const express = require("express");
 const { chromium } = require("playwright");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5190;
 const SPOTIFY_WEB_ENDPOINT = "https://open.spotify.com";
+const cache = new Map(); // ✅ Simple cache
 
 let browserInstance;
-let artistPage, trackPage;
 
-// **Start Persistent Browser & Preload Pages**
+// **Start Playwright Browser**
 async function startBrowser() {
-    if (!browserInstance) {
-        browserInstance = await chromium.launchPersistentContext("/tmp/playwright", {
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
-        artistPage = await browserInstance.newPage();
-        trackPage = await browserInstance.newPage();
-    }
-    return browserInstance;
-}
-
-// **Reduce Request Workload**
-async function blockUnnecessaryRequests(page) {
-    await page.route("**/*", async (route) => {
-        if (["image", "font", "media", "xhr", "websocket", "eventsource"].includes(route.request().resourceType())) {
-            await route.abort();
-        } else {
-            await route.continue();
-        }
+    if (browserInstance) await browserInstance.close(); // ✅ Restart browser if necessary
+    browserInstance = await chromium.launch({
+        headless: true,
+        args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage", // ✅ Reduce memory usage
+            "--disable-accelerated-2d-canvas",
+            "--disable-gpu"
+        ],
     });
 }
 
-// **Monthly Listeners**
+// **Monthly Listeners with Cache**
 async function getMonthlyListeners(artistId) {
-    const startTime = Date.now();
-    const artistUrl = `${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`;
-    let data = "N/A";
+    if (cache.has(artistId)) return cache.get(artistId); // ✅ Serve from cache
 
+    const page = await browserInstance.newPage();
     try {
-        await artistPage.goto(artistUrl, { timeout: 6000, waitUntil: "domcontentloaded" });
+        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, { timeout: 6000, waitUntil: "domcontentloaded" });
+        const element = await page.waitForSelector("span:has-text('monthly listeners')", { timeout: 10000 });
+        const result = { artistId, monthlyListeners: element ? (await element.innerText()).replace(/\D/g, "") : "N/A" };
 
-        const element = await artistPage.waitForSelector("span:has-text('monthly listeners')", { timeout: 3000 });
-        const text = await element.innerText();
-        data = text.replace(/\D/g, "") || "N/A";
+        cache.set(artistId, result); // ✅ Cache result
+        setTimeout(() => cache.delete(artistId), 10 * 60 * 1000); // ✅ Clear cache after 10 mins
+
+        return result;
     } catch (error) {
         console.error(`Error scraping artist ${artistId}:`, error);
+        return { artistId, monthlyListeners: "N/A" };
+    } finally {
+        await page.close(); // ✅ Close the page
     }
-
-    const responseTime = Date.now() - startTime;
-    return { artistId, monthlyListeners: data, responseTime: `${responseTime}ms` };
 }
 
-// **Scrape Track Play Count with Time Tracking**
+// **Track Play Count with Optimized Browser**
 async function getTrackPlaycount(trackId) {
-    const startTime = Date.now();
-    const trackUrl = `${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`;
-    let data = "N/A";
-
+    const page = await browserInstance.newPage();
     try {
-        await trackPage.goto(trackUrl, { timeout: 6000, waitUntil: "domcontentloaded" });
-
-        const element = await trackPage.waitForSelector("span[data-testid='playcount']", { timeout: 3000 });
-        data = await element.innerText() || "N/A";
+        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, { timeout: 6000, waitUntil: "domcontentloaded" });
+        const element = await page.waitForSelector("span[data-testid='playcount']", { timeout: 10000 });
+        return { trackId, playCount: element ? await element.innerText() : "N/A" };
     } catch (error) {
         console.error(`Error scraping track ${trackId}:`, error);
+        return { trackId, playCount: "N/A" };
+    } finally {
+        await page.close(); // ✅ Close the page
     }
-
-    const responseTime = Date.now() - startTime;
-    return { trackId, playCount: data, responseTime: `${responseTime}ms` };
 }
 
-// **API Route 1 - Monthly Listeners**
+// **API Routes**
 app.get("/get/monthly-listeners/:artistId", async (req, res) => {
     const result = await getMonthlyListeners(req.params.artistId);
     res.json(result);
 });
 
-// **API Route 2 - Individual Track Play Count**
 app.get("/get/playcount/:trackId", async (req, res) => {
     const result = await getTrackPlaycount(req.params.trackId);
     res.json(result);
 });
 
-// **Start the Server & Browser**
+// **Start Server**
 app.listen(PORT, async () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
     await startBrowser();
-    await blockUnnecessaryRequests(artistPage);
-    await blockUnnecessaryRequests(trackPage);
 });
