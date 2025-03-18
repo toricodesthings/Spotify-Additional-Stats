@@ -13,15 +13,17 @@ RUN npm install
 # Copy all project files into the container
 COPY . .
 
-# Clear any old Playwright installations (force fresh install)
-RUN rm -rf /root/.cache/ms-playwright
+# Set Playwright to use a persistent browser storage path
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
 
-# Install Playwright browsers and dependencies
+# Install Playwright browsers and dependencies at build time
 RUN npx playwright install --with-deps
 
+# Ensure Playwright has correct permissions
+RUN chmod -R 777 /app/playwright-browsers
 
-# Expose the port your app runs on (Render typically uses 10000+ ports)
+# Expose the port your app runs on
 EXPOSE 10000
 
-# Start the application, ensuring Playwright is installed first
-CMD ["sh", "-c", "npx playwright install --with-deps && node server.js"]
+# Start the application (No need to reinstall Playwright on every restart)
+CMD ["node", "server.js"]

@@ -30,11 +30,11 @@ async function getMonthlyListeners(artistId) {
     const page = await browserInstance.newPage();
     try {
         await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, { timeout: 10000, waitUntil: "domcontentloaded" });
-        const element = await page.waitForSelector("span:has-text('monthly listeners')", { timeout: 10000 });
+        const element = await page.waitForSelector("span:has-text('monthly listeners')", { timeout: 25000 });
         const result = { artistId, monthlyListeners: element ? (await element.innerText()).replace(/\D/g, "") : "N/A" };
 
         cache.set(artistId, result); // ✅ Cache result
-        setTimeout(() => cache.delete(artistId), 10 * 60 * 1000); // ✅ Clear cache after 10 mins
+        setTimeout(() => cache.delete(artistId), 20 * 60 * 1000); // ✅ Clear cache after 10 mins
 
         return result;
     } catch (error) {
@@ -50,7 +50,7 @@ async function getTrackPlaycount(trackId) {
     const page = await browserInstance.newPage();
     try {
         await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, { timeout: 10000, waitUntil: "domcontentloaded" });
-        const element = await page.waitForSelector("span[data-testid='playcount']", { timeout: 10000 });
+        const element = await page.waitForSelector("span[data-testid='playcount']", { timeout: 25000 });
         return { trackId, playCount: element ? await element.innerText() : "N/A" };
     } catch (error) {
         console.error(`Error scraping track ${trackId}:`, error);
