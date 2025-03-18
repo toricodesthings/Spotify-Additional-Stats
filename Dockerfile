@@ -1,5 +1,5 @@
-# Use a Node.js base image that includes a minimal Debian distribution
-FROM node:16-buster-slim
+# Use Node 18 base image on Debian Buster Slim
+FROM node:18-buster-slim
 
 # Install dependencies required for Chromium (Puppeteer)
 RUN apt-get update && apt-get install -y \
@@ -25,18 +25,18 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Set the working directory
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json (if available) and install dependencies
+# Copy package files and install Node dependencies
 COPY package*.json ./
 RUN npm install --production
 
 # Copy the rest of your application code
 COPY . .
 
-# Expose the port your server listens on
+# Expose the port (make sure your app listens on process.env.PORT)
 EXPOSE 10000
 
-# Run your application (adjust the entry point if needed)
+# Start the application
 CMD ["node", "server_puppeteer.js"]
