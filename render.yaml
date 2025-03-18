@@ -1,0 +1,24 @@
+services:
+  - name: spotify-additonal-stats-api
+    type: web
+    runtime: node
+    region: virginia
+    plan: free
+    buildCommand: |
+      mkdir -p /var/lib/apt/lists/partial
+      apt-get update && apt-get install -y wget libgtk-3-0 libgtk-4-1 libgbm1 \
+      libnss3 libasound2 libxshmfence1 libxcomposite1 libxrandr2 \
+      libxi6 libgl1 libxdamage1 libxtst6 libxfixes3 libxcursor1 \
+      libpango-1.0-0 libcairo2 libpangoft2-1.0-0 libgraphite2-3 \
+      libatk1.0-0 libgdk-pixbuf2.0-0 libglib2.0-0 libenchant-2-2 \
+      libsecret-1-0 libmanette-0.2-0 libgstreamer1.0-0 \
+      libgstreamer-gl1.0-0 libgstreamer-plugins-base1.0-0 \
+      libgstcodecparsers-1.0-0 libavif15 libgles2-mesa
+      npm install
+      npx playwright install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: 0
