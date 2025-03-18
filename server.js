@@ -16,9 +16,6 @@ async function startBrowser() {
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage", // ✅ Reduce memory usage
-            "--disable-accelerated-2d-canvas",
-            "--disable-gpu"
         ],
     });
 }
