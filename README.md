@@ -1,6 +1,6 @@
 # 🎶 Spotify Additional Stats API
 
-## Overview
+## Introduction
 
 **Spotify Additional Stats** is a Node.js API backend designed to retrieve two publicly available Spotify statistics not directly accessible via the official Spotify Web API:
 
@@ -35,7 +35,8 @@ npm install
 
 ### Running the Server
 
-**Note: Set USE_HTTPS to `false` if not self-hosting or do not have https certs**
+**Note: Set USE_HTTPS to `false` if not self-hosting or do not have https certs. If you do add the certs into ssl folder**
+
 Start your server locally with (or use the given run_server.bat):
 
 ```bash
