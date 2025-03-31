@@ -2,10 +2,10 @@
 
 ## Introduction
 
-**Spotify Additional Stats** is a Node.js API backend designed to retrieve two publicly available Spotify statistics not directly accessible via the official Spotify Web API:
+This is a Node.js API backend designed to retrieve two publicly available Spotify statistics not directly accessible via the official Spotify Web API:
 
-- ✅ **Monthly Listeners** (per artist)
-- ✅ **Track Playcounts** (individual track statistics)
+- ✅ **Monthly Listeners**
+- ✅ **Track Playcounts**
 
 Originally written in Python, this translated Node.js version utilizes Playwright to scrape public data directly from Spotify's public web interface (Monthly Listeners and Playcount)
 
