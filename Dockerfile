@@ -22,8 +22,8 @@ RUN npx playwright install --with-deps
 # Ensure Playwright has correct permissions
 RUN chmod -R 777 /app/playwright-browsers
 
-# Expose the port your app runs on
-EXPOSE 10000
+# Export HTTPS Port
+EXPOSE 8443
 
 # Start the application (No need to reinstall Playwright on every restart)
 CMD ["node", "server.js"]
