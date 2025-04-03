@@ -4,8 +4,8 @@
 
 This is a Node.js API backend designed to retrieve two publicly available Spotify statistics not directly accessible via the official Spotify Web API:
 
-- ✅ **Monthly Listeners**
-- ✅ **Track Playcounts**
+-  **Monthly Listeners**
+-  **Per-Track Playcounts**
 
 Originally written in Python, this translated Node.js version utilizes Playwright to scrape public data directly from Spotify's public web interface (Monthly Listeners and Playcount)
 
@@ -35,7 +35,6 @@ npm install
 
 ### Running the Server
 
-**Note: Set USE_HTTPS to `false` if not self-hosting or do not have https certs. If you do add the certs into ssl folder**
 
 Start your server locally with (or use the given run_server.bat):
 
@@ -43,11 +42,13 @@ Start your server locally with (or use the given run_server.bat):
 node server.js
 ```
 
+Note: It is heavily recommended to use some sort of Reverse Proxy if you want to host it on your own machine with global access. Caddy is recommended for automatic HTTPS configuration.
+
 Or build and run with Docker:
 
 ```bash
 docker build -t spotify-stats .
-docker run -p 8443:8443 spotify-stats
+docker run -p 9001:9001 spotify-stats
 ```
 
 ## 📡 API Endpoints
@@ -95,8 +96,8 @@ XXXXXXXXXXXXXXXXXXXX
 
 ## 🛠️ To-Do
 
-- Configure Reverse Proxy and remove the need for custom HTTPS server
-- Improve scraping speed (Above 2 seconds currently)
+- ~Configure Reverse Proxy and remove the need for custom HTTPS server~
+- Add rate-limiting
 
 ## ⚠️ Disclaimer
 
