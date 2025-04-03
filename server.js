@@ -1,12 +1,9 @@
 const express = require("express");
 const { chromium } = require("playwright");
-const https = require("https");
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
+
 
 const app = express();
-const PORT = process.env.PORT || 8443;
+const PORT = process.env.PORT || 9001;
 const SPOTIFY_WEB_ENDPOINT = "https://open.spotify.com";
 
 // Cache settings
@@ -24,24 +21,6 @@ const requestQueue = [];
 let isProcessing = false;
 const MAX_CONCURRENT_PAGES = 2; // Reduced to 2 concurrent pages as requested
 let activePages = 0;
-
-// HTTPS configuration
-const USE_HTTPS = true;
-
-// Attempt to load SSL certs if USE_HTTPS is set
-let sslOptions;
-if (USE_HTTPS) {
-  try {
-    sslOptions = {
-      key: fs.readFileSync(path.join(__dirname, "SSL", "private.key")),
-      cert: fs.readFileSync(path.join(__dirname, "SSL", "certificate.crt")),
-      ca: fs.readFileSync(path.join(__dirname, "SSL", "ca_bundle.crt")),
-    };
-  } catch (error) {
-    console.error("Failed to load SSL certificates, falling back to normal server:", error);
-    sslOptions = null;
-  }
-}
 
 /**
  * Start or restart the persistent Playwright Browser
@@ -320,16 +299,10 @@ app.get("/get/health", async (req, res) => {
 });
 
 async function startServer() {
-  // Start the appropriate server type
-  if (USE_HTTPS && sslOptions) {
-    https.createServer(sslOptions, app).listen(PORT, async () => {
-      console.log(`Secure server is running on https://localhost:${PORT}`);
-    });
-  } else {
-    http.createServer(app).listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
-    });
-  }
+  // Start the HTTP server with Express
+  app.listen(PORT, async () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
   
   // Start browser
   await startBrowser();
