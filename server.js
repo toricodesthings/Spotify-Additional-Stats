@@ -64,7 +64,6 @@ async function checkBrowserHealth() {
   
   // Force restart if browser is too old
   if (browserAge > BROWSER_MAX_LIFETIME || !browserInstance) {
-    // Only log sanitized browser age
     const ageMinutes = Math.floor(browserAge/60000);
     console.log(`Browser health check: Restarting browser (age: ${ageMinutes} minutes)`);
     await startBrowser();
@@ -75,7 +74,7 @@ async function checkBrowserHealth() {
   try {
     const context = await browserInstance.newContext();
     await context.close();
-  } catch {
+  } finally {
     await startBrowser();
   }
 }
