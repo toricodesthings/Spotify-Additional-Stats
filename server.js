@@ -69,7 +69,7 @@ async function checkBrowserHealth() {
     await startBrowser();
     return;
   }
-  
+  g
   // Test if browser is responsive
   try {
     const context = await browserInstance.newContext();
@@ -153,6 +153,17 @@ function queueTask(type, execute) {
 }
 
 /**
+ * Validate Spotify ID format (22 alphanumeric chars)
+ * @param {string} id
+ * @throws {Error} if invalid
+ */
+function validateSpotifyId(id) {
+  if (!/^[A-Za-z0-9]{22}$/.test(id)) {
+    throw new Error("Invalid Spotify ID format");
+  }
+}
+
+/**
  * Scrape monthly listeners from an artist page
  * @param {string} artistId
  * @returns {Promise<{artistId: string, monthlyListeners: string}>}
@@ -164,9 +175,7 @@ async function getMonthlyListeners(artistId) {
   
   return queueTask("monthly-listeners", async () => {
 
-    if (!/^[A-Za-z0-9]{22}$/.test(artistId)) {
-      throw new Error("Invalid artistId format");
-    }
+    validateSpotifyId(artistId);
 
     let context = null;
     let page = null;
@@ -214,9 +223,7 @@ async function getTrackPlaycount(trackId) {
   }
   
   return queueTask("track-playcount", async () => {
-    if (!/^[A-Za-z0-9]{22}$/.test(trackId)) {
-      throw new Error("Invalid artistId format");
-    }
+    validateSpotifyId(trackId);
 
     let context = null;
     let page = null;
