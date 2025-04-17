@@ -40,6 +40,9 @@ async function startBrowser() {
         "--disable-dev-shm-usage",
         "--disable-extensions",
         "--js-flags=--max-old-space-size=1024",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-component-update"
       ],
     });
     
@@ -71,9 +74,7 @@ async function checkBrowserHealth() {
   try {
     const context = await browserInstance.newContext();
     await context.close();
-    console.log("Browser health check: Browser is responsive");
   } catch (error) {
-    console.error("Browser health check: Browser is unresponsive, restarting:", error);
     await startBrowser();
   }
 }
@@ -83,12 +84,12 @@ async function checkBrowserHealth() {
  * @param {import('playwright').Page} page
  */
 async function setupPage(page) {
-  page.setDefaultNavigationTimeout(15000);
-  page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(20000);
+  page.setDefaultTimeout(20000);
   
   await page.route("**/*", (route, request) => {
     const resourceType = request.resourceType();
-    const blockedTypes = ["image", "font", "media", "xhr"];
+    const blockedTypes = ["image", "font", "media"];
     if (blockedTypes.includes(resourceType)) {
       route.abort();
     } else {
@@ -160,6 +161,11 @@ async function getMonthlyListeners(artistId) {
   }
   
   return queueTask("monthly-listeners", async () => {
+
+    if (!/^[A-Za-z0-9]{22}$/.test(artistId)) {
+      throw new Error("Invalid artistId format");
+    }
+
     let context = null;
     let page = null;
     let result = { artistId, monthlyListeners: "N/A" };
@@ -175,7 +181,7 @@ async function getMonthlyListeners(artistId) {
       });
       
       const element = await page.waitForSelector("span:has-text('monthly listeners')", {
-        timeout: 15000
+        timeout: 20000
       });
       
       if (element) {
@@ -206,6 +212,10 @@ async function getTrackPlaycount(trackId) {
   }
   
   return queueTask("track-playcount", async () => {
+    if (!/^[A-Za-z0-9]{22}$/.test(trackId)) {
+      throw new Error("Invalid artistId format");
+    }
+
     let context = null;
     let page = null;
     let result = { trackId, playCount: "N/A" };
@@ -221,7 +231,7 @@ async function getTrackPlaycount(trackId) {
       });
       
       const element = await page.waitForSelector("span[data-testid='playcount']", {
-        timeout: 15000
+        timeout: 20000
       });
       
       if (element) {
@@ -318,6 +328,7 @@ async function startServer() {
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
+  process.exit(1)
 });
 
 process.on('unhandledRejection', (reason, promise) => {
