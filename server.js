@@ -316,7 +316,6 @@ app.get("/get/health", async (req, res) => {
 async function startServer() {
   // Start the HTTP server with Express
   app.listen(PORT, async () => {
-    // Only log fixed string and port
     console.log(`Server is running on http://localhost:${PORT}`);
   });
   
