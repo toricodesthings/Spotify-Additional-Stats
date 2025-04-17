@@ -39,8 +39,8 @@ async function startBrowser() {
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-extensions",
-        "--js-flags=--max-old-space-size=3192",
-        "--disable-component-update"
+        "--disable-component-update",
+		"--disable-gpu"
       ],
     });
     
@@ -64,17 +64,18 @@ async function checkBrowserHealth() {
   
   // Force restart if browser is too old
   if (browserAge > BROWSER_MAX_LIFETIME || !browserInstance) {
+    // Only log sanitized browser age
     const ageMinutes = Math.floor(browserAge/60000);
     console.log(`Browser health check: Restarting browser (age: ${ageMinutes} minutes)`);
     await startBrowser();
     return;
   }
-  g
+  
   // Test if browser is responsive
   try {
     const context = await browserInstance.newContext();
     await context.close();
-  } finally {
+  } catch {
     await startBrowser();
   }
 }
@@ -89,7 +90,7 @@ async function setupPage(page) {
   
   await page.route("**/*", (route, request) => {
     const resourceType = request.resourceType();
-    const blockedTypes = ["image", "font", "media"];
+    const blockedTypes = ["image", "font", "media", "eventsource"];
     if (blockedTypes.includes(resourceType)) {
       route.abort();
     } else {
@@ -153,17 +154,6 @@ function queueTask(type, execute) {
 }
 
 /**
- * Validate Spotify ID format (22 alphanumeric chars)
- * @param {string} id
- * @throws {Error} if invalid
- */
-function validateSpotifyId(id) {
-  if (!/^[A-Za-z0-9]{22}$/.test(id)) {
-    throw new Error("Invalid Spotify ID format");
-  }
-}
-
-/**
  * Scrape monthly listeners from an artist page
  * @param {string} artistId
  * @returns {Promise<{artistId: string, monthlyListeners: string}>}
@@ -175,7 +165,9 @@ async function getMonthlyListeners(artistId) {
   
   return queueTask("monthly-listeners", async () => {
 
-    validateSpotifyId(artistId);
+    if (!/^[A-Za-z0-9]{22}$/.test(artistId)) {
+      throw new Error("Invalid artistId format");
+    }
 
     let context = null;
     let page = null;
@@ -223,7 +215,9 @@ async function getTrackPlaycount(trackId) {
   }
   
   return queueTask("track-playcount", async () => {
-    validateSpotifyId(trackId);
+    if (!/^[A-Za-z0-9]{22}$/.test(trackId)) {
+      throw new Error("Invalid artistId format");
+    }
 
     let context = null;
     let page = null;
@@ -322,6 +316,7 @@ app.get("/get/health", async (req, res) => {
 async function startServer() {
   // Start the HTTP server with Express
   app.listen(PORT, async () => {
+    // Only log fixed string and port
     console.log(`Server is running on http://localhost:${PORT}`);
   });
   
