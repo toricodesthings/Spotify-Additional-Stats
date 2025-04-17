@@ -39,9 +39,7 @@ async function startBrowser() {
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-extensions",
-        "--js-flags=--max-old-space-size=1024",
-        "--disable-background-timer-throttling",
-        "--disable-backgrounding-occluded-windows",
+        "--js-flags=--max-old-space-size=3192",
         "--disable-component-update"
       ],
     });
