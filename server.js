@@ -45,10 +45,11 @@ async function startBrowser() {
     });
     
     browserLastRestart = Date.now();
+    // Only log a fixed string and ISO timestamp (no user input)
     console.log(`Browser launched at ${new Date().toISOString()}`);
     return true;
   } catch (error) {
-    console.error("Failed to start browser:", error);
+    console.error("Failed to start browser:", String(error && error.message ? error.message.replace(/[\r\n]/g, "") : "Unknown error"));
     browserInstance = null;
     return false;
   }
@@ -63,7 +64,9 @@ async function checkBrowserHealth() {
   
   // Force restart if browser is too old
   if (browserAge > BROWSER_MAX_LIFETIME || !browserInstance) {
-    console.log(`Browser health check: Restarting browser (age: ${Math.floor(browserAge/60000)} minutes)`);
+    // Only log sanitized browser age
+    const ageMinutes = Math.floor(browserAge/60000);
+    console.log(`Browser health check: Restarting browser (age: ${ageMinutes} minutes)`);
     await startBrowser();
     return;
   }
@@ -72,7 +75,7 @@ async function checkBrowserHealth() {
   try {
     const context = await browserInstance.newContext();
     await context.close();
-  } catch (error) {
+  } catch {
     await startBrowser();
   }
 }
@@ -120,7 +123,9 @@ async function processQueue() {
     const result = await task.execute();
     task.resolve(result);
   } catch (error) {
-    console.error(`Error processing task: ${task.type}`, error);
+    const safeType = typeof task.type === "string" ? task.type.replace(/[\r\n]/g, "") : "unknown";
+    const safeMsg = String(error && error.message ? error.message.replace(/[\r\n]/g, "") : "Unknown error");
+    console.error(`Error processing task: ${safeType}`, safeMsg);
     task.reject(error);
     
     if (error.message.includes("Browser") || error.message.includes("context")) {
@@ -260,7 +265,8 @@ app.get("/get/monthly-listeners/:artistId", async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error("Error in /get/monthly-listeners:", error);
+    // Only log sanitized error message
+    console.error("Error in /get/monthly-listeners:", String(error && error.message ? error.message.replace(/[\r\n]/g, "") : "Unknown error"));
     res.status(500).json({
       error: "Unable to process request.",
       message: error.message,
@@ -280,7 +286,8 @@ app.get("/get/playcount/:trackId", async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error("Error in /get/playcount:", error);
+    // Only log sanitized error message
+    console.error("Error in /get/playcount:", String(error && error.message ? error.message.replace(/[\r\n]/g, "") : "Unknown error"));
     res.status(500).json({
       error: "Unable to process request.",
       message: error.message,
@@ -309,6 +316,7 @@ app.get("/get/health", async (req, res) => {
 async function startServer() {
   // Start the HTTP server with Express
   app.listen(PORT, async () => {
+    // Only log fixed string and port
     console.log(`Server is running on http://localhost:${PORT}`);
   });
   
@@ -325,12 +333,13 @@ async function startServer() {
 }
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  console.error('Uncaught Exception:', String(error && error.message ? error.message.replace(/[\r\n]/g, "") : "Unknown error"));
   process.exit(1)
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  const safeReason = String(reason && reason.message ? reason.message.replace(/[\r\n]/g, "") : "Unknown reason");
+  console.error('Unhandled Rejection at:', promise, 'reason:', safeReason);
 });
 
 startServer().catch((err) => {
