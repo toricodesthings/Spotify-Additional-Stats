@@ -13,13 +13,13 @@ const cache = new Map();
 // Browser management
 let browserInstance = null;
 let browserLastRestart = Date.now();
-const BROWSER_MAX_LIFETIME = 4 * 60 * 60 * 1000; // 4 hours before forced restart
+const BROWSER_MAX_LIFETIME = 1 * 60 * 60 * 1000; // 1 hours before forced restart
 const BROWSER_RESTART_INTERVAL = 30 * 60 * 1000; // 30 minutes health check
 
 // Request queue management
 const requestQueue = [];
 let isProcessing = false;
-const MAX_CONCURRENT_PAGES = 2; // Reduced to 2 concurrent pages as requested
+const MAX_CONCURRENT_PAGES = 3; 
 let activePages = 0;
 
 /**
@@ -135,7 +135,6 @@ async function processQueue() {
     activePages--;
     isProcessing = false;
     
-    // Process next item
     setImmediate(processQueue);
   }
 }
@@ -172,35 +171,70 @@ async function getMonthlyListeners(artistId) {
     let context = null;
     let page = null;
     let result = { artistId, monthlyListeners: "N/A" };
-    
+
     try {
+      if (!browserInstance || !browserInstance.isConnected()) {
+        console.log("Browser instance invalid, attempting restart before task execution.");
+        await startBrowser();
+        if (!browserInstance) throw new Error("Browser restart failed.");
+      }
       context = await browserInstance.newContext();
       page = await context.newPage();
-      await setupPage(page);
-      
-      await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, {
-        timeout: 20000,
-        waitUntil: "domcontentloaded"
-      });
-      
-      const element = await page.waitForSelector("span:has-text('monthly listeners')", {
-        timeout: 20000
-      });
-      
+      await setupPage(page); // Existing setup function
+
+      try {
+        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, {
+          timeout: 20000, // Keep reasonable timeouts
+          waitUntil: "domcontentloaded"
+        });
+      } catch (navError) {
+        // Throw a more specific error for logging
+        throw new Error(`Navigation failed for artist ${artistId}: ${navError.message}`);
+      }
+
+      let element;
+      try {
+        element = await page.waitForSelector("span:has-text('monthly listeners')", {
+          timeout: 20000 // Keep reasonable timeouts
+        });
+      } catch (selectorError) {
+         // Log selector issues but potentially allow graceful failure
+         console.warn(`Selector for monthly listeners not found for artist ${artistId}: ${selectorError.message}`);
+         // Keep result.monthlyListeners as "N/A"
+         // Optionally, throw new Error(...) if this should be a hard failure
+      }
+
       if (element) {
         const text = await element.innerText();
         const numericValue = text.replace(/\D/g, "");
         result.monthlyListeners = numericValue;
       }
-      
+
       cache.set(`artist:${artistId}`, result);
       setTimeout(() => cache.delete(`artist:${artistId}`), CACHE_EXPIRY);
-      
+
       return result;
-    } finally {
-      if (page) await page.close().catch(err => console.error("Error closing page:", err));
-      if (context) await context.close().catch(err => console.error("Error closing context:", err));
-    }
+    } catch (taskError) {
+        // Log the specific task error before it's caught by processQueue
+        console.error(`Error during getMonthlyListeners task for ${artistId}:`, taskError.message);
+        throw taskError; // Re-throw to be handled by processQueue's catch block
+      } finally {
+        // Ensure cleanup happens even if errors occur
+        if (page) {
+          try {
+            await page.close();
+          } catch (err) {
+            console.error(`Error closing page for ${result.artistId || result.trackId}:`, err.message);
+          }
+        }
+        if (context) {
+          try {
+            await context.close();
+          } catch (err) {
+            console.error(`Error closing context for ${result.artistId || result.trackId}:`, err.message);
+          }
+        }
+      }
   });
 }
 
@@ -220,38 +254,75 @@ async function getTrackPlaycount(trackId) {
     }
 
     let context = null;
-    let page = null;
-    let result = { trackId, playCount: "N/A" };
-    
-    try {
-      context = await browserInstance.newContext();
-      page = await context.newPage();
-      await setupPage(page);
-      
-      await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, {
-        timeout: 20000,
-        waitUntil: "domcontentloaded"
+      let page = null;
+      let result = { trackId, playCount: "N/A" };
+
+      try {
+        if (!browserInstance || !browserInstance.isConnected()) {
+          console.log("Browser instance invalid, attempting restart before task execution.");
+          await startBrowser();
+          if (!browserInstance) throw new Error("Browser restart failed.");
+        }
+        context = await browserInstance.newContext();
+        page = await context.newPage();
+        await setupPage(page); // Existing setup function
+
+        try {
+          await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, {
+            timeout: 20000, // Keep reasonable timeouts
+            waitUntil: "domcontentloaded"
+          });
+        } catch (navError) {
+          // Throw a more specific error for logging
+          throw new Error(`Navigation failed for track ${trackId}: ${navError.message}`);
+        }
+
+        let element;
+        try {
+          element = await page.waitForSelector("span[data-testid='playcount']", {
+            timeout: 20000 // Keep reasonable timeouts
+          });
+        } catch (selectorError) {
+           // Log selector issues but potentially allow graceful failure
+           console.warn(`Selector for playcount not found for track ${trackId}: ${selectorError.message}`);
+           // Keep result.playCount as "N/A"
+           // Optionally, throw new Error(...) if this should be a hard failure
+        }
+
+
+        if (element) {
+          const text = await element.innerText();
+          result.playCount = text;
+        }
+
+        cache.set(`track:${trackId}`, result);
+        setTimeout(() => cache.delete(`track:${trackId}`), CACHE_EXPIRY);
+
+        return result;
+      } catch (taskError) {
+          // Log the specific task error before it's caught by processQueue
+          console.error(`Error during getTrackPlaycount task for ${trackId}:`, taskError.message);
+          throw taskError; // Re-throw to be handled by processQueue's catch block
+        } finally {
+          // Ensure cleanup happens even if errors occur
+          if (page) {
+            try {
+              await page.close();
+            } catch (err) {
+              console.error(`Error closing page for ${result.artistId || result.trackId}:`, err.message);
+            }
+          }
+          if (context) {
+            try {
+              await context.close();
+            } catch (err) {
+              console.error(`Error closing context for ${result.artistId || result.trackId}:`, err.message);
+            }
+          }
+        }
       });
-      
-      const element = await page.waitForSelector("span[data-testid='playcount']", {
-        timeout: 20000
-      });
-      
-      if (element) {
-        const text = await element.innerText();
-        result.playCount = text;
-      }
-      
-      cache.set(`track:${trackId}`, result);
-      setTimeout(() => cache.delete(`track:${trackId}`), CACHE_EXPIRY);
-      
-      return result;
-    } finally {
-      if (page) await page.close().catch(err => console.error("Error closing page:", err));
-      if (context) await context.close().catch(err => console.error("Error closing context:", err));
-    }
-  });
 }
+
 
 // -- API Routes --
 app.get("/get/monthly-listeners/:artistId", async (req, res) => {

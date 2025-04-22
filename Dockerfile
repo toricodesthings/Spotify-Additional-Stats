@@ -25,5 +25,5 @@ RUN chmod -R 777 /app/playwright-browsers
 # Export Port
 EXPOSE 9001
 
-# Start the application (No need to reinstall Playwright on every restart)
+# Start the application
 CMD ["node", "server.js"]
