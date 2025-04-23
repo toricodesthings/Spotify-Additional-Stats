@@ -1,5 +1,5 @@
 # Use Playwright's official image with necessary dependencies
-FROM mcr.microsoft.com/playwright:v1.51.1-jammy
+FROM mcr.microsoft.com/playwright:v1.52.0-noble
 
 # Set the working directory inside the container
 WORKDIR /app

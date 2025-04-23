@@ -48,7 +48,7 @@ Or build and run with Docker:
 
 ```bash
 docker build -t spotify-stats .
-docker run -p 9001:9001 spotify-stats
+docker run --ipc=host -p 9001:9001 spotify-stats
 ```
 
 ## 📡 API Endpoints
