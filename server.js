@@ -40,7 +40,10 @@ async function startBrowser() {
         "--disable-dev-shm-usage",
         "--disable-extensions",
         "--disable-component-update",
-		"--disable-gpu"
+        "--disable-gpu",
+        "--disable-accelerated-2d-canvas", // Additional performance options
+        "--disable-accelerated-video-decode",
+        "--disable-software-rasterizer"
       ],
     });
     
@@ -90,10 +93,35 @@ async function setupPage(page) {
   
   await page.route("**/*", (route, request) => {
     const resourceType = request.resourceType();
-    const blockedTypes = ["image", "font", "media", "eventsource"];
-    if (blockedTypes.includes(resourceType)) {
+    const url = request.url();
+    
+    // Block these resource types completely
+    const fullBlockTypes = ["image", "font", "media"];
+    
+    // Be selective about these types
+    if (fullBlockTypes.includes(resourceType)) {
       route.abort();
-    } else {
+    } 
+    // Selectively block certain scripts/resources
+    else if (resourceType === "script" && (
+      url.includes("analytics") || 
+      url.includes("tracking") || 
+      url.includes("gtm.") ||
+      url.includes("pixel")
+    )) {
+      route.abort();
+    }
+    // Block unneeded fetch/XHR resources
+    else if ((resourceType === "fetch" || resourceType === "xhr") && (
+      url.includes("recommendations") || 
+      url.includes("collector") ||
+      url.includes("metrics") ||
+      url.includes("analytics")
+    )) {
+      route.abort();
+    } 
+    // Allow all other resources including stylesheets
+    else {
       route.continue();
     }
   });
@@ -153,24 +181,38 @@ function queueTask(type, execute) {
 }
 
 /**
- * Scrape monthly listeners from an artist page
- * @param {string} artistId
- * @returns {Promise<{artistId: string, monthlyListeners: string}>}
+ * Generic helper function to scrape data from Spotify
+ * @param {Object} options - Configuration options
+ * @param {string} options.type - Type of entity (artist or track)
+ * @param {string} options.id - Entity ID
+ * @param {string} options.path - URL path component
+ * @param {Array} options.selectionStrategies - Array of strategies to locate the element
+ * @param {Function} options.processText - Function to process the text
+ * @returns {Promise<Object>} - Promise with the scraped data
  */
-async function getMonthlyListeners(artistId) {
-  if (cache.has(`artist:${artistId}`)) {
-    return cache.get(`artist:${artistId}`);
+async function scrapeSpotifyData(options) {
+  const { type, id, path, selectionStrategies, processText } = options;
+  const cacheKey = `${type}:${id}`;
+  
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey);
   }
   
-  return queueTask("monthly-listeners", async () => {
-
-    if (!/^[A-Za-z0-9]{22}$/.test(artistId)) {
-      throw new Error("Invalid artistId format");
+  return queueTask(`${type}-data`, async () => {
+    if (!/^[A-Za-z0-9]{22}$/.test(id)) {
+      throw new Error(`Invalid ${type}Id format`);
     }
 
     let context = null;
     let page = null;
-    let result = { artistId, monthlyListeners: "N/A" };
+    let result = { [`${type}Id`]: id };
+    
+    // Set default value based on type
+    if (type === 'artist') {
+      result.monthlyListeners = "N/A";
+    } else if (type === 'track') {
+      result.playCount = "N/A";
+    }
 
     try {
       if (!browserInstance || !browserInstance.isConnected()) {
@@ -178,63 +220,109 @@ async function getMonthlyListeners(artistId) {
         await startBrowser();
         if (!browserInstance) throw new Error("Browser restart failed.");
       }
-      context = await browserInstance.newContext();
-      page = await context.newPage();
-      await setupPage(page); // Existing setup function
+      
+      context = await browserInstance.newContext({
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+      });
+      
+      page = await context.newPage({ viewport: { width: 500, height: 300 } });
+      await setupPage(page);
 
       try {
-        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/artist/${artistId}`, {
-          timeout: 20000, // Keep reasonable timeouts
+        await page.goto(`${SPOTIFY_WEB_ENDPOINT}/${path}/${id}`, {
+          timeout: 20000,
           waitUntil: "domcontentloaded"
         });
       } catch (navError) {
-        // Throw a more specific error for logging
-        throw new Error(`Navigation failed for artist ${artistId}: ${navError.message}`);
+        throw new Error(`Navigation failed for ${type} ${id}: ${navError.message}`);
       }
 
       let element;
+      let strategyUsed = "none";
       try {
-        element = await page.waitForSelector("span:has-text('monthly listeners')", {
-          timeout: 20000 // Keep reasonable timeouts
-        });
+        // Execute strategies in parallel and use the first successful one
+        const strategyPromises = selectionStrategies.map(strategy => strategy(page));
+        const strategyResult = await Promise.race(strategyPromises.map(p => p.catch(e => null)));
+        
+        if (strategyResult) {
+          element = strategyResult.element;
+          strategyUsed = strategyResult.strategy;
+          console.log(`Successfully found element using strategy: ${strategyUsed} for ${type} ${id}`);
+        } else {
+          throw new Error("All strategies returned null");
+        }
       } catch (selectorError) {
-         // Log selector issues but potentially allow graceful failure
-         console.warn(`Selector for monthly listeners not found for artist ${artistId}: ${selectorError.message}`);
-         // Keep result.monthlyListeners as "N/A"
-         // Optionally, throw new Error(...) if this should be a hard failure
+        console.warn(`All selectors failed for ${type} ${id}: ${selectorError.message}`);
       }
 
       if (element) {
         const text = await element.innerText();
-        const numericValue = text.replace(/\D/g, "");
-        result.monthlyListeners = numericValue;
+        processText(result, text);
       }
 
-      cache.set(`artist:${artistId}`, result);
-      setTimeout(() => cache.delete(`artist:${artistId}`), CACHE_EXPIRY);
+      cache.set(cacheKey, result);
+      setTimeout(() => cache.delete(cacheKey), CACHE_EXPIRY);
 
       return result;
     } catch (taskError) {
-        // Log the specific task error before it's caught by processQueue
-        console.error(`Error during getMonthlyListeners task for ${artistId}:`, taskError.message);
-        throw taskError; // Re-throw to be handled by processQueue's catch block
-      } finally {
-        // Ensure cleanup happens even if errors occur
-        if (page) {
-          try {
-            await page.close();
-          } catch (err) {
-            console.error(`Error closing page for ${result.artistId || result.trackId}:`, err.message);
-          }
-        }
-        if (context) {
-          try {
-            await context.close();
-          } catch (err) {
-            console.error(`Error closing context for ${result.artistId || result.trackId}:`, err.message);
-          }
+      console.error(`Error during ${type} data scraping for ${id}:`, taskError.message);
+      throw taskError;
+    } finally {
+      if (page) {
+        try {
+          await page.close();
+        } catch (err) {
+          console.error(`Error closing page for ${type} ${id}:`, err.message);
         }
       }
+      if (context) {
+        try {
+          await context.close();
+        } catch (err) {
+          console.error(`Error closing context for ${type} ${id}:`, err.message);
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Scrape monthly listeners from an artist page
+ * @param {string} artistId
+ * @returns {Promise<{artistId: string, monthlyListeners: string}>}
+ */
+async function getMonthlyListeners(artistId) {
+  return scrapeSpotifyData({
+    type: 'artist',
+    id: artistId,
+    path: 'artist',
+    selectionStrategies: [
+      // Strategy 1: Locator with filter
+      async (page) => {
+        try {
+          const el = await page.locator("span").filter({ hasText: /[\d,]+ monthly listeners/ }).first();
+          return { element: el, strategy: "locator-filter" };
+        } catch (e) {
+          return null;
+        }
+      },
+      
+      // Strategy 2: Text-based selector
+      async (page) => {
+        try {
+          const el = await page.waitForSelector("span:has-text('monthly listeners')", {
+            timeout: 15000
+          });
+          return { element: el, strategy: "has-text-selector" };
+        } catch (e) {
+          return null;
+        }
+      }
+    ],
+    processText: (result, text) => {
+      const numericValue = text.replace(/\D/g, "");
+      result.monthlyListeners = numericValue;
+    }
   });
 }
 
@@ -244,85 +332,62 @@ async function getMonthlyListeners(artistId) {
  * @returns {Promise<{trackId: string, playCount: string}>}
  */
 async function getTrackPlaycount(trackId) {
-  if (cache.has(`track:${trackId}`)) {
-    return cache.get(`track:${trackId}`);
-  }
-  
-  return queueTask("track-playcount", async () => {
-    if (!/^[A-Za-z0-9]{22}$/.test(trackId)) {
-      throw new Error("Invalid artistId format");
+  return scrapeSpotifyData({
+    type: 'track',
+    id: trackId,
+    path: 'track',
+    selectionStrategies: [
+      // Strategy 1: Using data-testid
+      async (page) => {
+        try {
+          const el = await page.waitForSelector("span[data-testid='playcount']", {
+            timeout: 15000
+          });
+          return { element: el, strategy: "data-testid" };
+        } catch (e) {
+          return null;
+        }
+      },
+      
+      // Strategy 2: Using locator with filter
+      async (page) => {
+        try {
+          const el = await page.locator("span").filter({ hasText: /^[0-9,]+$/ }).first();
+          return { element: el, strategy: "locator-filter" };
+        } catch (e) {
+          return null;
+        }
+      },
+      
+      // Strategy 3: JavaScript evaluation
+      async (page) => {
+        try {
+          const text = await page.evaluate(() => {
+            // Look for spans containing only numbers and commas (likely play counts)
+            const spans = Array.from(document.querySelectorAll('span'));
+            const playCountSpan = spans.find(span => 
+              span.innerText && /^[0-9,]+$/.test(span.innerText.trim()));
+            
+            return playCountSpan ? playCountSpan.innerText : null;
+          });
+          
+          if (text) {
+            return { 
+              element: { innerText: async () => text },
+              strategy: "evaluate-text" 
+            };
+          }
+          return null;
+        } catch (e) {
+          return null;
+        }
+      }
+    ],
+    processText: (result, text) => {
+      result.playCount = text;
     }
-
-    let context = null;
-      let page = null;
-      let result = { trackId, playCount: "N/A" };
-
-      try {
-        if (!browserInstance || !browserInstance.isConnected()) {
-          console.log("Browser instance invalid, attempting restart before task execution.");
-          await startBrowser();
-          if (!browserInstance) throw new Error("Browser restart failed.");
-        }
-        context = await browserInstance.newContext();
-        page = await context.newPage();
-        await setupPage(page); // Existing setup function
-
-        try {
-          await page.goto(`${SPOTIFY_WEB_ENDPOINT}/track/${trackId}`, {
-            timeout: 20000, // Keep reasonable timeouts
-            waitUntil: "domcontentloaded"
-          });
-        } catch (navError) {
-          // Throw a more specific error for logging
-          throw new Error(`Navigation failed for track ${trackId}: ${navError.message}`);
-        }
-
-        let element;
-        try {
-          element = await page.waitForSelector("span[data-testid='playcount']", {
-            timeout: 20000 // Keep reasonable timeouts
-          });
-        } catch (selectorError) {
-           // Log selector issues but potentially allow graceful failure
-           console.warn(`Selector for playcount not found for track ${trackId}: ${selectorError.message}`);
-           // Keep result.playCount as "N/A"
-           // Optionally, throw new Error(...) if this should be a hard failure
-        }
-
-
-        if (element) {
-          const text = await element.innerText();
-          result.playCount = text;
-        }
-
-        cache.set(`track:${trackId}`, result);
-        setTimeout(() => cache.delete(`track:${trackId}`), CACHE_EXPIRY);
-
-        return result;
-      } catch (taskError) {
-          // Log the specific task error before it's caught by processQueue
-          console.error(`Error during getTrackPlaycount task for ${trackId}:`, taskError.message);
-          throw taskError; // Re-throw to be handled by processQueue's catch block
-        } finally {
-          // Ensure cleanup happens even if errors occur
-          if (page) {
-            try {
-              await page.close();
-            } catch (err) {
-              console.error(`Error closing page for ${result.artistId || result.trackId}:`, err.message);
-            }
-          }
-          if (context) {
-            try {
-              await context.close();
-            } catch (err) {
-              console.error(`Error closing context for ${result.artistId || result.trackId}:`, err.message);
-            }
-          }
-        }
-      });
+  });
 }
-
 
 // -- API Routes --
 app.get("/get/monthly-listeners/:artistId", async (req, res) => {
