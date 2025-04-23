@@ -1,0 +1,11 @@
+services:
+  spotify-stats:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spotify-stats-api
+    ports:
+      - "9001:9001"
+    ipc: host
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers
